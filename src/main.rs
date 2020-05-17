@@ -20,27 +20,29 @@ mod models {
 }
 
 mod userscript {
-    use std::fmt::Display;
-    const USER_SCRIPT: &str = include_str!("./userscript.js");
-    pub fn main<A: Display, B: Display>(key: A, url: B) -> String {
-        let key_url = format!("const KEY = \"{}\"; const URL = {};", key, url);
-        USER_SCRIPT.replace(";;KEY_URL;;", &key_url)
+    use std::net::SocketAddr;
+    pub fn make(key: char, addr: impl Into<SocketAddr>) -> String {
+        include_str!("./userscript.js").replace(
+            ";;KEY_URL;;",
+            &format!(
+                "const KEY = \"{}\"; const URL = \"http://{}\";",
+                key,
+                addr.into()
+            ),
+        )
     }
 }
 
 #[tokio::main]
 async fn main() {
+    let addr = ([127, 0, 0, 1], 8005);
     use dirs_next::config_dir;
     let _conf = config_dir().map(|mut path| {
         path.push("startpage");
         path
     });
-
-    let routes = {
-        warp::path("startpage.user.js")
-            .map(|| userscript::main(" ", "http://localhost:8005"))
-            .or(warp::any().map(|| "404"))
-    };
-
-    warp::serve(routes).run(([127, 0, 0, 1], 8005)).await;
+    let routes = warp::path("startpage.user.js")
+        .map(move || userscript::make(' ', addr))
+        .or(warp::any().map(|| "404"));
+    warp::serve(routes).run(addr).await;
 }
